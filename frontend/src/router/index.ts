@@ -19,8 +19,20 @@ const router = createRouter({
     {
       path: '/',
       name: 'Home',
-      component: () => import('@/views/home/HomePage.vue'),
+      component: () => import('@/views/question/QuestionListPage.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/ask',
+      name: 'AskQuestion',
+      component: () => import('@/views/question/AskQuestionPage.vue'),
       meta: { requiresAuth: true },
+    },
+    {
+      path: '/questions/:id',
+      name: 'QuestionDetail',
+      component: () => import('@/views/question/QuestionDetailPage.vue'),
+      meta: { requiresAuth: false },
     },
   ],
 });

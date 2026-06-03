@@ -1,10 +1,13 @@
 package com.yiyixing.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yiyixing.dto.response.ApiResponse;
 import com.yiyixing.util.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -22,9 +25,11 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final ObjectMapper objectMapper;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, ObjectMapper objectMapper) {
         this.jwtUtil = jwtUtil;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -42,28 +47,41 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             String username = jwtUtil.extractUsername(token);
-
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                if (jwtUtil.isTokenValid(token, username)) {
-                    Long userId = jwtUtil.extractUserId(token);
-                    List<SimpleGrantedAuthority> authorities = List.of(
-                            new SimpleGrantedAuthority("ROLE_USER")
-                    );
-
-                    UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(username, null, authorities);
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                    // Pass userId into request attribute for downstream use
-                    request.setAttribute("userId", userId);
-
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
-                }
+            if (username == null) {
+                sendUnauthorized(response, "无效的令牌");
+                return;
             }
-        } catch (Exception ignored) {
-            // Invalid token — proceed without authentication
+
+            if (!jwtUtil.isTokenValid(token, username)) {
+                sendUnauthorized(response, "令牌已过期，请重新登录");
+                return;
+            }
+
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                Long userId = jwtUtil.extractUserId(token);
+                List<SimpleGrantedAuthority> authorities = List.of(
+                        new SimpleGrantedAuthority("ROLE_USER")
+                );
+
+                UsernamePasswordAuthenticationToken authToken =
+                        new UsernamePasswordAuthenticationToken(username, null, authorities);
+                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                request.setAttribute("userId", userId);
+                SecurityContextHolder.getContext().setAuthentication(authToken);
+            }
+        } catch (Exception e) {
+            sendUnauthorized(response, "令牌验证失败");
+            return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write(objectMapper.writeValueAsString(
+                ApiResponse.error(HttpStatus.UNAUTHORIZED.value(), message)));
     }
 }

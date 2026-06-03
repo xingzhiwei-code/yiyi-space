@@ -4,11 +4,13 @@
       <router-link to="/" class="logo">一亩三分学田</router-link>
       <nav class="nav-links">
         <template v-if="auth.isAuthenticated">
-          <router-link to="/">首页</router-link>
+          <router-link to="/">问答</router-link>
+          <router-link to="/ask" class="ask-btn">提问</router-link>
           <span class="username">{{ auth.user?.username }}</span>
           <el-button size="small" @click="handleLogout">退出</el-button>
         </template>
         <template v-else>
+          <router-link to="/">问答</router-link>
           <router-link to="/login">登录</router-link>
           <router-link to="/register">注册</router-link>
         </template>
