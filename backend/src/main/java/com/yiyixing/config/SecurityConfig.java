@@ -43,13 +43,21 @@ public class SecurityConfig {
                                 "/api/v1/tags/**",
                                 "/api/v1/comments",
                                 "/api/v1/comments/**",
+                                "/error"
+                        ).permitAll()
+                        // 文章：GET 公开，POST/PUT/DELETE 需认证
+                        .requestMatchers(
+                                org.springframework.http.HttpMethod.GET,
                                 "/api/v1/articles",
-                                "/api/v1/articles/**",
+                                "/api/v1/articles/slug/**"
+                        ).permitAll()
+                        .requestMatchers(
+                                org.springframework.http.HttpMethod.GET,
                                 "/api/v1/follows/*/followers",
                                 "/api/v1/follows/*/followers/count",
                                 "/api/v1/follows/*/following",
                                 "/api/v1/follows/*/following/count",
-                                "/error"
+                                "/api/v1/follows/check/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
