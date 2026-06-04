@@ -90,3 +90,60 @@ export type CommentTargetType = 'QUESTION' | 'ANSWER' | 'ARTICLE';
 export interface CommentRequest {
   content: string;
 }
+
+// --- Article ---
+
+export interface Article {
+  id: number;
+  title: string;
+  content: string | null;
+  contentHtml: string | null;
+  slug: string;
+  status: string;
+  viewCount: number;
+  likeCount: number;
+  favoriteCount: number;
+  commentCount: number;
+  author: UserBrief;
+  tags: Tag[];
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+
+export interface ArticleRequest {
+  title: string;
+  content: string;
+  tags: string[];
+}
+
+// --- Interaction ---
+
+export interface InteractionResponse {
+  liked: boolean;
+  count: number;
+}
+
+export type InteractionTargetType = 'QUESTION' | 'ANSWER' | 'ARTICLE' | 'COMMENT';
+
+// --- Follow ---
+
+export interface FollowData {
+  id: number;
+  follower: UserBrief;
+  following: UserBrief;
+  createdAt: string;
+}
+
+// --- Notification ---
+
+export interface Notification {
+  id: number;
+  type: string;
+  fromUser: UserBrief | null;
+  targetType: string | null;
+  targetId: number | null;
+  content: string | null;
+  read: boolean;
+  createdAt: string;
+}

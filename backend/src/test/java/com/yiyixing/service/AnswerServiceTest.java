@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 
 import java.util.List;
@@ -42,6 +43,9 @@ class AnswerServiceTest {
     @Mock
     private MarkdownUtil markdownUtil;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private AnswerServiceImpl answerService;
 
@@ -56,7 +60,7 @@ class AnswerServiceTest {
         @Test
         @DisplayName("成功创建回答 — Markdown 渲染 + 计数器递增")
         void success_rendersMarkdownAndIncrementsCount() {
-            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil);
+            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil, eventPublisher);
             when(questionRepository.findById(1L)).thenReturn(Optional.of(question()));
             when(userRepository.findById(1L)).thenReturn(Optional.of(user()));
             when(markdownUtil.render("hello")).thenReturn("<p>hello</p>");
@@ -75,7 +79,7 @@ class AnswerServiceTest {
         @Test
         @DisplayName("问题不存在 — 抛 404")
         void questionNotFound_throwsNotFound() {
-            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil);
+            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil, eventPublisher);
             when(questionRepository.findById(99L)).thenReturn(Optional.empty());
 
             AnswerRequest req = new AnswerRequest();
@@ -89,7 +93,7 @@ class AnswerServiceTest {
         @Test
         @DisplayName("用户不存在 — 抛 404")
         void userNotFound_throwsNotFound() {
-            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil);
+            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil, eventPublisher);
             when(questionRepository.findById(1L)).thenReturn(Optional.of(question()));
             when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
@@ -124,7 +128,7 @@ class AnswerServiceTest {
         @Test
         @DisplayName("问题作者采纳回答 — 成功")
         void success_marksAnswerAndResolvesQuestion() {
-            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil);
+            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil, eventPublisher);
             Question q = question();
             Answer a = answerFor(q);
             when(questionRepository.findById(1L)).thenReturn(Optional.of(q));
@@ -142,7 +146,7 @@ class AnswerServiceTest {
         @Test
         @DisplayName("非问题作者 — 抛 403")
         void notAuthor_throwsForbidden() {
-            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil);
+            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil, eventPublisher);
             when(questionRepository.findById(1L)).thenReturn(Optional.of(question()));
 
             ApiException ex = assertThrows(ApiException.class,
@@ -154,7 +158,7 @@ class AnswerServiceTest {
         @Test
         @DisplayName("回答不属于该问题 — 抛 400")
         void answerNotForQuestion_throwsBadRequest() {
-            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil);
+            answerService = new AnswerServiceImpl(answerRepository, questionRepository, userRepository, markdownUtil, eventPublisher);
             Answer wrongAnswer = new Answer();
             wrongAnswer.setId(2L);
             Question otherQ = new Question();

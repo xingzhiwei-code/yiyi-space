@@ -97,13 +97,23 @@
 | 标记已读 | 单个/全部 | P1 |
 | 未读计数 | 导航栏显示未读数量 | P1 |
 
-### 2.8 搜索
+## 2.8 搜索
 
 | 功能 | 描述 | 优先级 |
 |------|------|--------|
 | 全文搜索 | 搜索问题/文章标题和内容 | P1 |
 | 按标签搜索 | 查看某标签下的内容 | P0 |
 | 高级筛选 | 按时间、类型、状态筛选 | P2 |
+
+### 2.9 用户关注
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| 关注/取关 | Follow/Unfollow 用户 | P1 |
+| 关注者/粉丝列表 | 查看关注关系 | P2 |
+| 关注通知 | 被关注时产生通知 | P1 |
+| 关注者发帖 | 关注的用户发布问题时通知 | P1 |
+| 关注者发文章 | 关注的用户发布文章时通知 | P2 |
 
 ---
 
@@ -159,11 +169,26 @@
 | 方法 | 端点 | 认证 | 描述 |
 |------|------|------|------|
 | GET | `/` | 否 | 文章列表 |
-| GET | `/slug/{slug}` | 否 | 按 slug 获取文章 |
-| POST | `/` | 是 | 创建文章 |
+| GET | `/slug/{slug}` | 否 | 按 slug 获取文章（slug 格式：`art-{nanoid8}`，如 `art-xK7mQ2pL`） |
+| POST | `/` | 是 | 创建文章（自动生成 slug） |
 | PUT | `/{id}` | 是 | 更新文章 |
 | DELETE | `/{id}` | 是 | 删除文章 |
 | PUT | `/{id}/publish` | 是 | 发布草稿 |
+
+#### 用户 `/api/v1/users`（关注扩展）
+| 方法 | 端点 | 认证 | 描述 |
+|------|------|------|------|
+| POST | `/me/follow/{userId}` | 是 | 关注用户 |
+| DELETE | `/me/follow/{userId}` | 是 | 取消关注 |
+| GET | `/{id}/followers` | 否 | 粉丝列表 |
+| GET | `/{id}/following` | 否 | 关注列表 |
+
+#### 互动 `/api/v1/interactions`
+| 方法 | 端点 | 认证 | 描述 |
+|------|------|------|------|
+| POST | `/like` | 是 | 点赞/取消点赞（toggle），返回 `{liked, likeCount}` |
+| POST | `/favorite` | 是 | 收藏/取消收藏（toggle） |
+| GET | `/me/favorites` | 是 | 我的收藏列表 |
 
 #### 标签 `/api/v1/tags`
 | 方法 | 端点 | 认证 | 描述 |
@@ -218,6 +243,136 @@
 - `follows` — 用户关注（Phase 3）
 - `notifications` — 通知（Phase 3）
 
+### Phase 3 数据库详细设计
+
+#### articles — 文章表
+
+```sql
+CREATE TABLE articles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    author_id BIGINT NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    content MEDIUMTEXT NOT NULL,
+    content_html MEDIUMTEXT,
+    slug VARCHAR(64) NOT NULL UNIQUE,
+    status ENUM('DRAFT', 'PUBLISHED') NOT NULL DEFAULT 'DRAFT',
+    view_count INT NOT NULL DEFAULT 0,
+    like_count INT NOT NULL DEFAULT 0,
+    favorite_count INT NOT NULL DEFAULT 0,
+    comment_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    published_at TIMESTAMP NULL,
+    FOREIGN KEY (author_id) REFERENCES users(id)
+);
+```
+
+- **slug 格式**：`art-{nanoid8}`，如 `art-xK7mQ2pL`，发布时自动生成且不可修改
+- **状态**：DRAFT（草稿）/ PUBLISHED（已发布），草稿可发布但已发布不能退回草稿
+
+#### article_tags — 文章-标签关联
+
+```sql
+CREATE TABLE article_tags (
+    article_id BIGINT NOT NULL,
+    tag_id BIGINT NOT NULL,
+    PRIMARY KEY (article_id, tag_id),
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+);
+```
+
+#### user_interactions — 用户互动（统一表）
+
+```sql
+CREATE TABLE user_interactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    target_type ENUM('QUESTION', 'ANSWER', 'ARTICLE', 'COMMENT') NOT NULL,
+    target_id BIGINT NOT NULL,
+    type ENUM('LIKE', 'FAVORITE') NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_target_type (user_id, target_type, target_id, type),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+- 一条表搞定所有点赞和收藏
+- 复合唯一索引天然防重复
+- **点赞 toggle**：存在 → 删除（取消），不存在 → 插入（点赞）
+- **收藏 toggle**：同上逻辑
+- 点赞/收藏数通过 `COUNT(*)` 查询，不冗余存储（Phase 3 数据量小）
+
+#### follows — 用户关注
+
+```sql
+CREATE TABLE follows (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    follower_id BIGINT NOT NULL,
+    following_id BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_follower_following (follower_id, following_id),
+    FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (following_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+- `follower_id`：关注者，`following_id`：被关注者
+- 禁止自关注（follower_id != following_id）
+
+#### notifications — 通知
+
+```sql
+CREATE TABLE notifications (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    type ENUM('ANSWER', 'COMMENT', 'ACCEPT', 'LIKE', 'FOLLOW') NOT NULL,
+    from_user_id BIGINT,
+    target_type ENUM('QUESTION', 'ANSWER', 'ARTICLE', 'COMMENT') NULL,
+    target_id BIGINT NULL,
+    content VARCHAR(500),
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (from_user_id) REFERENCES users(id),
+    INDEX idx_user_read_created (user_id, is_read, created_at DESC)
+);
+```
+
+- **通知类型**：
+  - `ANSWER`：有人回答你的问题
+  - `COMMENT`：有人评论你的内容
+  - `ACCEPT`：你的回答被采纳
+  - `LIKE`：有人点赞你的内容（P2）
+  - `FOLLOW`：有人关注了你
+- **from_user_id**：触发通知的用户
+- **target_type/target_id**：关联的目标内容
+- **content**：通知摘要文本
+
+### Phase 3 通知触发机制（Spring Event）
+
+采用 **Spring Event 同步解耦** 方式触发通知：
+
+```
+AnswerService ──publishEvent──▶ AnswerCreatedEvent ──@EventListener──▶ NotificationEventListener ──▶ 创建通知
+QuestionService ──▶ QuestionCreatedEvent ──▶ 通知关注者
+CommentService ──▶ CommentCreatedEvent ──▶ 通知被评论者
+LikeService ──▶ LikedEvent ──▶ 通知被点赞者
+FollowService ──▶ FollowedEvent ──▶ 通知被关注者
+```
+
+**理由**：
+- 同步执行（同一事务），数据一致性有保证
+- 解耦：主业务 Service 不依赖通知逻辑
+- 可测试：通知逻辑可独立测试
+- 未来可扩展为异步（只需加 `@Async`）
+
+**关注通知规则**：
+- A 关注 B → B 收到 `FOLLOW` 通知
+- A 发布问题 → A 的所有关注者收到通知（单次最多 100 人）
+- A 发布文章 → A 的所有关注者收到通知
+- 关注/取关不产生通知给关注者本人（避免自通知）
+
 ---
 
 ## 5. 开发阶段
@@ -244,9 +399,17 @@
 ### Phase 3: 文章 + 互动 + 通知
 
 **交付物：**
-- 文章系统（草稿 + 发布）
-- 点赞、收藏、关注
-- 通知系统
+- 文章系统（草稿 + 发布，slug 格式 `art-{nanoid8}`）
+- 点赞、收藏（统一 `user_interactions` 表，toggle 模式，返回 `{liked, likeCount}`）
+- 用户关注（`follows` 表，关注通知，发帖通知）
+- 通知系统（Spring Event 解耦，5 种通知类型）
+
+**设计决策（2026-06-04）：**
+1. 文章 slug 自动生成：`art-{nanoid8}`，不可读但保证唯一且 URL 短
+2. 互动统一表：`user_interactions` + 复合唯一索引防重复
+3. 点赞/收藏 toggle：存在 → 删除（取消），不存在 → 插入（操作）
+4. 通知触发：Spring Event 同步解耦，同一事务保证一致性
+5. 关注通知：被关注通知 + 关注者发帖通知（单次最多 100 人）
 
 ### Phase 4: 搜索 + 优化
 
@@ -284,3 +447,4 @@
 | 日期 | 变更 | 作者 |
 |------|------|------|
 | 2026-06-03 | 初始版本，完成 Phase 1 代码 | AI Assistant |
+| 2026-06-04 | 完善 Phase 3 设计：文章 slug、统一互动表、Spring Event 通知、关注规则 | AI Assistant |

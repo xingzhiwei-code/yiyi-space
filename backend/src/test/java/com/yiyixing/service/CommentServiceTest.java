@@ -4,9 +4,12 @@ import com.yiyixing.dto.request.CommentRequest;
 import com.yiyixing.dto.response.CommentResponse;
 import com.yiyixing.entity.Comment;
 import com.yiyixing.entity.Comment.TargetType;
+import com.yiyixing.entity.Question;
 import com.yiyixing.entity.User;
 import com.yiyixing.exception.ApiException;
+import com.yiyixing.repository.AnswerRepository;
 import com.yiyixing.repository.CommentRepository;
+import com.yiyixing.repository.QuestionRepository;
 import com.yiyixing.repository.UserRepository;
 import com.yiyixing.service.impl.CommentServiceImpl;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -36,6 +40,15 @@ class CommentServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private QuestionRepository questionRepository;
+
+    @Mock
+    private AnswerRepository answerRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     @InjectMocks
     private CommentServiceImpl commentService;
 
@@ -47,6 +60,10 @@ class CommentServiceTest {
         @DisplayName("成功创建 — 绑定用户")
         void success_bindsAuthor() {
             when(userRepository.findById(1L)).thenReturn(Optional.of(user()));
+            Question q = new Question();
+            q.setId(1L);
+            q.setAuthor(user());
+            when(questionRepository.findById(1L)).thenReturn(Optional.of(q));
             when(commentRepository.save(any(Comment.class))).thenAnswer(inv -> {
                 Comment c = inv.getArgument(0);
                 c.setId(1L);

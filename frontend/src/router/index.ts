@@ -34,6 +34,38 @@ const router = createRouter({
       component: () => import('@/views/question/QuestionDetailPage.vue'),
       meta: { requiresAuth: false },
     },
+    // Phase 3: 文章
+    {
+      path: '/articles',
+      name: 'ArticleList',
+      component: () => import('@/views/article/ArticleListPage.vue'),
+      meta: { requiresAuth: false },
+    },
+    {
+      path: '/articles/write',
+      name: 'WriteArticle',
+      component: () => import('@/views/article/WriteArticlePage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/articles/edit/:id',
+      name: 'EditArticle',
+      component: () => import('@/views/article/WriteArticlePage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/articles/:slug',
+      name: 'ArticleDetail',
+      component: () => import('@/views/article/ArticleDetailPage.vue'),
+      meta: { requiresAuth: false },
+    },
+    // Phase 3: 通知
+    {
+      path: '/notifications',
+      name: 'NotificationCenter',
+      component: () => import('@/views/notification/NotificationCenterPage.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 });
 

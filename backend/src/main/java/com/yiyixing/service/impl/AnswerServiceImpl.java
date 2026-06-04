@@ -1,5 +1,7 @@
 package com.yiyixing.service.impl;
 
+import com.yiyixing.event.AnswerAcceptedEvent;
+import com.yiyixing.event.AnswerCreatedEvent;
 import com.yiyixing.dto.request.AnswerRequest;
 import com.yiyixing.dto.response.AnswerResponse;
 import com.yiyixing.entity.Answer;
@@ -11,6 +13,7 @@ import com.yiyixing.repository.QuestionRepository;
 import com.yiyixing.repository.UserRepository;
 import com.yiyixing.service.AnswerService;
 import com.yiyixing.util.MarkdownUtil;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,15 +27,18 @@ public class AnswerServiceImpl implements AnswerService {
     private final QuestionRepository questionRepository;
     private final UserRepository userRepository;
     private final MarkdownUtil markdownUtil;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AnswerServiceImpl(AnswerRepository answerRepository,
                              QuestionRepository questionRepository,
                              UserRepository userRepository,
-                             MarkdownUtil markdownUtil) {
+                             MarkdownUtil markdownUtil,
+                             ApplicationEventPublisher eventPublisher) {
         this.answerRepository = answerRepository;
         this.questionRepository = questionRepository;
         this.userRepository = userRepository;
         this.markdownUtil = markdownUtil;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -51,6 +57,10 @@ public class AnswerServiceImpl implements AnswerService {
 
         answerRepository.save(answer);
         questionRepository.incrementAnswerCount(questionId);
+
+        // 发布回答创建事件 → 通知问题作者
+        eventPublisher.publishEvent(new AnswerCreatedEvent(this,
+                questionId, question.getAuthor().getId(), authorId));
 
         return AnswerResponse.from(answer);
     }
@@ -84,6 +94,10 @@ public class AnswerServiceImpl implements AnswerService {
 
         question.setStatus(Question.Status.RESOLVED);
         questionRepository.save(question);
+
+        // 发布回答被采纳事件 → 通知回答作者
+        eventPublisher.publishEvent(new AnswerAcceptedEvent(this,
+                answerId, answer.getAuthor().getId(), questionId));
 
         return AnswerResponse.from(answer);
     }
