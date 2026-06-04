@@ -88,7 +88,7 @@ public class ArticleServiceImpl implements ArticleService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public ArticleResponse getBySlug(String slug) {
         Article article = articleRepository.findBySlugAndStatus(slug, Article.Status.PUBLISHED)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "文章不存在"));
